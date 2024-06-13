@@ -20,14 +20,16 @@ const urls = [
         productSelector: '.product',
         titleSelector: '.entry-title a',
         priceSelector: '.woocommerce-Price-amount.amount bdi',
-        imageSelector: 'a img'
+        imageSelector: 'a img',
+        baseUrl: 'https://www.revelab.es'
     },
     {
         url: 'https://fotocarrete.com/categoria-producto/pelicula/35-mm/',
         productSelector: '.product',
         titleSelector: '.woocommerce-loop-product__title',
         priceSelector: '.woocommerce-Price-amount.amount bdi',
-        imageSelector: '.product-image img'
+        imageSelector: '.product-image img',
+        baseUrl: 'https://fotocarrete.com'
     }
 ];
 
@@ -35,6 +37,14 @@ const urls = [
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
+
+// Función para obtener la URL completa de la imagen
+const getFullImageUrl = (baseUrl, imageUrl) => {
+    if (imageUrl && !imageUrl.startsWith('http')) {
+        return `${baseUrl}${imageUrl}`;
+    }
+    return imageUrl;
+};
 
 // Ruta para realizar scraping y devolver los resultados como JSON
 app.get('/scrape', async (req, res) => {
@@ -52,15 +62,13 @@ app.get('/scrape', async (req, res) => {
                     let imagen = $(element).find(site.imageSelector).attr('data-src') || $(element).find(site.imageSelector).attr('src');
 
                     // Ajustar la URL de la imagen si es relativa
-                    if (imagen && !imagen.startsWith('http')) {
-                        imagen = `https://www.revelab.es${imagen}`;
-                    }
+                    imagen = getFullImageUrl(site.baseUrl, imagen);
 
                     resultados.push({
                         url: site.url,
                         titulo,
                         precio,
-                        imagen: imagen ? imagen : null
+                        imagen: imagen ? `/proxy?url=${encodeURIComponent(imagen)}` : null
                     });
 
                     console.log(`Imagen añadida para ${site.url}: ${imagen}`);
@@ -69,7 +77,6 @@ app.get('/scrape', async (req, res) => {
                 console.log(`Scraping completado para ${site.url}`);
             } catch (error) {
                 console.error(`Error al scrapear ${site.url}:`, error.message);
-                throw error;
             }
         };
 
@@ -82,6 +89,20 @@ app.get('/scrape', async (req, res) => {
     } catch (error) {
         console.error('Error general:', error);
         res.status(500).send('Ocurrió un error al realizar el scraping');
+    }
+});
+
+// Ruta proxy para imágenes
+app.get('/proxy', async (req, res) => {
+    const { url } = req.query;
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        const contentType = response.headers['content-type'];
+        res.setHeader('Content-Type', contentType);
+        res.send(response.data);
+    } catch (error) {
+        console.error('Error al obtener la imagen:', error.message);
+        res.status(500).send('Ocurrió un error al obtener la imagen');
     }
 });
 
