@@ -2,26 +2,16 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 const PORT = 3000;
 
-// Configuración CORS
+// Configuración de CORS
 const corsOptions = {
-    origin: 'http://localhost:5500',  // Reemplaza con el origen de tu front-end
+    origin: 'http://localhost:5500',
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-
-// Proxy para las imágenes de revelab.es
-app.use('/proxy', createProxyMiddleware({
-    target: 'https://www.revelab.es',
-    changeOrigin: true,
-    pathRewrite: {
-        '^/proxy': '',  // Elimina '/proxy' de la URL final
-    },
-}));
 
 // Definición de URLs a scrapear
 const urls = [
@@ -41,17 +31,16 @@ const urls = [
     }
 ];
 
-// Ruta principal para servir el archivo index.html
+// Ruta principal para servir un archivo HTML estático
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');  
+    res.sendFile(__dirname + '/index.html');
 });
 
-// Ruta para realizar el scraping
+// Ruta para realizar scraping y devolver los resultados como JSON
 app.get('/scrape', async (req, res) => {
     try {
         let resultados = [];
 
-        // Función para realizar el scraping de productos
         const scrapeProducts = async (site) => {
             try {
                 const { data } = await axios.get(site.url);
@@ -62,7 +51,7 @@ app.get('/scrape', async (req, res) => {
                     const precio = $(element).find(site.priceSelector).text().trim();
                     let imagen = $(element).find(site.imageSelector).attr('data-src') || $(element).find(site.imageSelector).attr('src');
 
-                    // Verifica si la URL de la imagen es válida
+                    // Ajustar la URL de la imagen si es relativa
                     if (imagen && !imagen.startsWith('http')) {
                         imagen = `https://www.revelab.es${imagen}`;
                     }
@@ -71,13 +60,16 @@ app.get('/scrape', async (req, res) => {
                         url: site.url,
                         titulo,
                         precio,
-                        imagen: imagen ? `/proxy${imagen}` : null  // Ruta relativa al proxy para la imagen
+                        imagen: imagen ? imagen : null
                     });
+
+                    console.log(`Imagen añadida para ${site.url}: ${imagen}`);
                 });
 
                 console.log(`Scraping completado para ${site.url}`);
             } catch (error) {
-                console.error(`Error al scrapear ${site.url}: ${error.message}`);
+                console.error(`Error al scrapear ${site.url}:`, error.message);
+                throw error;
             }
         };
 
